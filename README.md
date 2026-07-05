@@ -1,18 +1,36 @@
-![figure](https://pufferai.github.io/source/resource/header.png)
+# PufferLib Four Rooms
 
-[![Discord](https://dcbadge.vercel.app/api/server/spT4huaGYV?style=plastic)](https://discord.gg/spT4huaGYV)
-[![Twitter](https://img.shields.io/twitter/url/https/twitter.com/cloudposse.svg?style=social&label=Follow%20%40jsuarez)](https://twitter.com/jsuarez)
+This fork contains a Puffer-native implementation of MiniGrid's classic
+[Four Rooms](https://minigrid.farama.org/environments/minigrid/FourRoomsEnv/)
+environment (`MiniGrid-FourRooms-v0`).
 
-PufferLib is a fast and sane reinforcement learning library that can train tiny, super-human models in seconds. The included learning algorithm, hyperparameter tuning, and simulation methods are the product of our own research. All our tools are free and open source. Need a high performance environment for your application? We build them professionally and offer training + extended support. Contact jsuarez🐡puffer🐡ai.
+![Four Rooms environment](resources/four_rooms/fourrooms.gif)
 
-All of our documentation is hosted at [puffer.ai](https://puffer.ai "PufferLib Documentation"). @jsuarez5341 on [Discord](https://discord.gg/puffer) for support. Post there before opening issues. We're always looking for new contributors!
+The goal is to keep the environment small, fast, and easy to train inside
+[PufferLib](https://github.com/PufferAI/PufferLib).
 
-## Star to puff up the project!
+## Branches
 
-<a href="https://star-history.com/#pufferai/pufferlib&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=pufferai/pufferlib&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=pufferai/pufferlib&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=pufferai/pufferlib&type=Date" />
- </picture>
-</a>
+- `dev`: active development branch. Includes local macOS CPU/MPS setup work.
+- `four-rooms-4`: PR branch kept close to upstream PufferLib for submitting the
+  Four Rooms environment changes.
+
+## Quick Start
+
+Build the CPU backend for Four Rooms:
+
+```bash
+uv run ./build.sh four_rooms --cpu
+```
+
+Run a short CPU training smoke test:
+
+```bash
+uv run puffer train four_rooms --slowly
+```
+
+On Apple Silicon, the PyTorch trainer can use MPS:
+
+```bash
+PUFFERLIB_TORCH_DEVICE=mps uv run puffer train four_rooms --slowly
+```
