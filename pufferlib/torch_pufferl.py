@@ -99,6 +99,17 @@ _TORCH_TO_CTYPE = {
     torch.float32: ctypes.c_float,
 }
 
+def _torch_device():
+    device = os.environ.get('PUFFERLIB_TORCH_DEVICE')
+    if device is not None:
+        if device == 'cuda' and not _C.gpu:
+            raise RuntimeError('PUFFERLIB_TORCH_DEVICE=cuda requires a CUDA build')
+        if device == 'mps' and not torch.backends.mps.is_available():
+            raise RuntimeError('PUFFERLIB_TORCH_DEVICE=mps requires MPS support')
+        return device
+
+    return 'cuda' if _C.gpu else 'cpu'
+
 def _actions_for_vec_step(action):
     if action.dim() == 1:
         action = action.unsqueeze(-1)
@@ -116,7 +127,7 @@ def _cpu_tensor(ptr, shape, dtype):
 class PuffeRL:
     def __init__(self, args, vec, policy, verbose=True):
         config = args['train']
-        device = 'cuda' if _C.gpu else 'cpu'
+        device = _torch_device()
         self.device = device
 
         torch.set_float32_matmul_precision('high')
@@ -238,6 +249,7 @@ class PuffeRL:
                 self._vec.gpu_step(actions_flat.data_ptr())
                 torch.cuda.synchronize()
             else:
+                actions_flat = actions_flat.cpu()
                 self._vec.cpu_step(actions_flat.data_ptr())
 
             o, r, d = self.vec_obs, self.vec_rewards, self.vec_terminals
@@ -434,6 +446,19 @@ class PuffeRL:
 def compute_puff_advantage(values, rewards, terminals,
         ratio, advantages, gamma, gae_lambda, vtrace_rho_clip, vtrace_c_clip):
     num_steps, horizon = values.shape
+    if values.device.type == 'mps':
+        lastpufferlam = torch.zeros(num_steps, device=values.device)
+        for t in range(horizon - 2, -1, -1):
+            t_next = t + 1
+            nextnonterminal = 1.0 - terminals[:, t_next]
+            imp = ratio[:, t]
+            rho_t = imp.clamp(max=vtrace_rho_clip)
+            c_t = imp.clamp(max=vtrace_c_clip)
+            delta = rho_t * rewards[:, t_next] + gamma * values[:, t_next] * nextnonterminal - values[:, t]
+            lastpufferlam = delta + gamma * gae_lambda * c_t * lastpufferlam * nextnonterminal
+            advantages[:, t] = lastpufferlam
+        return advantages
+
     fn = _C.puff_advantage if values.is_cuda else _C.puff_advantage_cpu
     fn(
         values.data_ptr(), rewards.data_ptr(), terminals.data_ptr(),
@@ -484,7 +509,7 @@ def load_policy(args, vec):
     decoder = decoder_cls(vec.act_sizes, policy_kwargs['hidden_size'])
     policy = pufferlib.models.Policy(encoder, decoder, network)
 
-    device = 'cuda' if _C.gpu else 'cpu'
+    device = _torch_device()
     policy = policy.to(device)
 
     load_id = args['load_id']
@@ -513,4 +538,3 @@ def load_policy(args, vec):
         policy.load_state_dict(state_dict)
 
     return policy
-
