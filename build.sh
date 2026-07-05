@@ -143,7 +143,11 @@ OUTPUT_NAME=${OUTPUT_NAME:-$ENV}
 # Standalone environment build
 # -mavx2 enables AVX2 intrinsics (__m256, _mm256_*) which drive.h and
 # src/bf16.h use directly. x86_64 only — strip if porting to ARM/Apple Silicon.
-SIMD_FLAGS=(-mavx2 -mfma)
+if [ "$(uname -m)" = "x86_64" ]; then
+    SIMD_FLAGS=(-mavx2 -mfma)
+else
+    SIMD_FLAGS=()
+fi
 if [ -n "$DEBUG" ] || [ "$MODE" = "local" ]; then
     CLANG_OPT=(-g -O0 "${CLANG_WARN[@]}" "${SANITIZE_FLAGS[@]}" "${SIMD_FLAGS[@]}")
     NVCC_OPT="-O0 -g"
@@ -253,6 +257,30 @@ mkdir -p build
 STATIC_OBJ="build/libstatic_${ENV}.o"
 STATIC_LIB="build/libstatic_${ENV}.a"
 
+fix_macos_openmp_runtime() {
+    if [ "$PLATFORM" != "Darwin" ]; then
+        return
+    fi
+
+    local torch_lib_dir
+    torch_lib_dir=$(python - <<'PY' 2>/dev/null || true
+import os
+import torch
+print(os.path.join(os.path.dirname(torch.__file__), "lib"))
+PY
+)
+    if [ -z "$torch_lib_dir" ] || [ ! -f "$torch_lib_dir/libomp.dylib" ]; then
+        return
+    fi
+
+    local current_omp
+    current_omp=$(otool -L "$OUTPUT" | awk '/libomp[.]dylib/{print $1; exit}')
+    if [ -n "$current_omp" ] && [ "$current_omp" != "@rpath/libomp.dylib" ]; then
+        install_name_tool -change "$current_omp" "@rpath/libomp.dylib" "$OUTPUT"
+    fi
+    install_name_tool -add_rpath "$torch_lib_dir" "$OUTPUT" 2>/dev/null || true
+}
+
 if [ ! -f "$BINDING_SRC" ]; then
     echo "Error: $BINDING_SRC not found"
     exit 1
@@ -304,6 +332,7 @@ if [ -z "$MODE" ]; then
         -o "$OUTPUT"
     )
     "${LINK_CMD[@]}"
+    fix_macos_openmp_runtime
     echo "Built: $OUTPUT"
 
 elif [ "$MODE" = "cpu" ]; then
@@ -327,6 +356,7 @@ elif [ "$MODE" = "cpu" ]; then
         -o "$OUTPUT"
     )
     "${LINK_CMD[@]}"
+    fix_macos_openmp_runtime
     echo "Built: $OUTPUT"
 
 elif [ "$MODE" = "profile" ]; then
