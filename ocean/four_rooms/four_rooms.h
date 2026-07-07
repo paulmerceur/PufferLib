@@ -141,30 +141,37 @@ static inline void observation_to_world(FourRooms* env, int obs_x, int obs_y,
 static inline void compute_visibility(unsigned char view[FOUR_ROOMS_VIEW_SIZE][FOUR_ROOMS_VIEW_SIZE],
         unsigned char visible[FOUR_ROOMS_VIEW_SIZE][FOUR_ROOMS_VIEW_SIZE]) {
     memset(visible, 0, FOUR_ROOMS_VIEW_SIZE * FOUR_ROOMS_VIEW_SIZE * sizeof(unsigned char));
-    visible[FOUR_ROOMS_VIEW_SIZE - 1][FOUR_ROOMS_VIEW_SIZE / 2] = 1;
 
-    // MiniGrid propagates visibility from the agent at bottom-center after rotating the view.
-    for (int y = FOUR_ROOMS_VIEW_SIZE - 1; y >= 0; y--) {
-        for (int x = 0; x < FOUR_ROOMS_VIEW_SIZE - 1; x++) {
-            if (!visible[y][x] || view[y][x] == WALL) {
+    int agent_x = FOUR_ROOMS_VIEW_SIZE / 2;
+    int agent_y = FOUR_ROOMS_VIEW_SIZE - 1;
+    float start_x = (float)agent_x + 0.5f;
+    float start_y = (float)agent_y + 0.5f;
+
+    for (int y = 0; y < FOUR_ROOMS_VIEW_SIZE; y++) {
+        for (int x = 0; x < FOUR_ROOMS_VIEW_SIZE; x++) {
+            int dx = x - agent_x;
+            int dy = y - agent_y;
+            int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+            if (steps == 0) {
+                visible[y][x] = 1;
                 continue;
             }
-            visible[y][x + 1] = 1;
-            if (y > 0) {
-                visible[y - 1][x] = 1;
-                visible[y - 1][x + 1] = 1;
-            }
-        }
 
-        for (int x = FOUR_ROOMS_VIEW_SIZE - 1; x > 0; x--) {
-            if (!visible[y][x] || view[y][x] == WALL) {
-                continue;
+            int blocked = 0;
+            float end_x = (float)x + 0.5f;
+            float end_y = (float)y + 0.5f;
+            for (int step = 1; step < 4 * steps; step++) {
+                float t = (float)step / (float)(4 * steps);
+                int ray_x = (int)(start_x + t * (end_x - start_x));
+                int ray_y = (int)(start_y + t * (end_y - start_y));
+                if ((ray_x != agent_x || ray_y != agent_y) &&
+                        (ray_x != x || ray_y != y) &&
+                        view[ray_y][ray_x] == WALL) {
+                    blocked = 1;
+                    break;
+                }
             }
-            visible[y][x - 1] = 1;
-            if (y > 0) {
-                visible[y - 1][x] = 1;
-                visible[y - 1][x - 1] = 1;
-            }
+            visible[y][x] = !blocked;
         }
     }
 }
