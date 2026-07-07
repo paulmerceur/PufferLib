@@ -361,6 +361,11 @@ void c_render(FourRooms* env) {
     Color obs_overlay = (Color){180, 180, 180, 80};
     for (int y = 0; y < FOUR_ROOMS_VIEW_SIZE; y++) {
         for (int x = 0; x < FOUR_ROOMS_VIEW_SIZE; x++) {
+            int base_idx = (y * FOUR_ROOMS_VIEW_SIZE + x) * FOUR_ROOMS_OBS_CHANNELS;
+            if (env->observations[base_idx] == UNSEEN) {
+                continue;
+            }
+
             int world_x, world_y;
             observation_to_world(env, x, y, &world_x, &world_y);
             if (world_x >= 0 && world_x < env->size && world_y >= 0 && world_y < env->size) {
